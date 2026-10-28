@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="./assets/index-CNQMG4EB.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-ZQjq5oAh.css">
+  <script type="module" crossorigin src="./assets/index-njA9O2xY.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BvClt-Uw.css">
 </head>
 <body>
   <div class="glow glow-1" aria-hidden="true"></div>
@@ -23,10 +23,14 @@
         <img src="./favicon.svg" alt="" class="brand-icon">
         <div>
           <h1>Wave Studio</h1>
-          <p class="tagline">Make beats. Sing melodies. Share songs.</p>
+          <p class="tagline">Make beats. Sing melodies. Share songs. Western or Indian.</p>
         </div>
       </a>
       <div class="top-actions">
+        <div id="mode-switch" class="mode-switch" role="radiogroup" aria-label="Music style">
+          <button data-mode="western" role="radio">🎹 Western</button>
+          <button data-mode="indian" role="radio">🪕 Indian</button>
+        </div>
         <button id="share-btn" class="btn btn-glow">🔗 Share song</button>
         <button id="export-btn" class="btn">⤓ Export WAV</button>
       </div>
@@ -114,6 +118,7 @@
 
         <div class="grid-scroll">
           <div class="grid">
+            <div id="taal-marks" class="row marks hidden"></div>
             <div id="step-numbers" class="row numbers"></div>
             <div id="drum-grid"></div>
             <div class="divider"><span>Melody</span></div>
@@ -126,34 +131,53 @@
       <section class="panel sound">
         <div class="panel-head">
           <h2>Sound</h2>
+          <span id="raga-mood" class="raga-mood"></span>
         </div>
 
-        <p class="label">Synth wave</p>
-        <div id="wave-picker" class="wave-picker" role="radiogroup" aria-label="Synth wave shape"></div>
+        <div class="sound-grid">
+          <div class="sound-col">
+            <p class="label">Melody sound</p>
+            <div id="wave-picker" class="wave-picker" role="radiogroup" aria-label="Melody sound"></div>
 
-        <div class="selects">
-          <label class="control">
-            <span>Key</span>
-            <select id="key-select"></select>
-          </label>
-          <label class="control">
-            <span>Scale</span>
-            <select id="scale-select"></select>
-          </label>
+            <label class="toggle indian-only">
+              <input type="checkbox" id="drone">
+              <span class="switch" aria-hidden="true"></span>
+              <span><b>🎻 Tanpura drone</b><br>A soft Sa–Pa hum to sing along with</span>
+            </label>
+          </div>
+
+          <div class="sound-col">
+            <label class="control">
+              <span id="key-label">Key</span>
+              <select id="key-select"></select>
+            </label>
+            <label class="control">
+              <span id="scale-label">Scale</span>
+              <select id="scale-select"></select>
+            </label>
+            <label class="control indian-only">
+              <span>Taal</span>
+              <select id="taal-select"></select>
+            </label>
+          </div>
+
+          <div class="sound-col">
+            <label class="control">
+              <span>Brightness <b id="cutoff-value"></b></span>
+              <input id="cutoff" type="range" min="300" max="12000" step="50">
+            </label>
+            <label class="control">
+              <span>Reverb <b id="reverb-value"></b></span>
+              <input id="reverb" type="range" min="0" max="100" step="1">
+            </label>
+            <label class="control">
+              <span>Echo <b id="delay-value"></b></span>
+              <input id="delay" type="range" min="0" max="100" step="1">
+            </label>
+          </div>
         </div>
 
-        <label class="control">
-          <span>Brightness <b id="cutoff-value"></b></span>
-          <input id="cutoff" type="range" min="300" max="12000" step="50">
-        </label>
-        <label class="control">
-          <span>Reverb <b id="reverb-value"></b></span>
-          <input id="reverb" type="range" min="0" max="100" step="1">
-        </label>
-        <label class="control">
-          <span>Echo <b id="delay-value"></b></span>
-          <input id="delay" type="range" min="0" max="100" step="1">
-        </label>
+        <p class="legend indian-only">Sargam guide: (k) = komal · (t) = tivra · dot above = higher octave (taar) · dot below = lower octave (mandra)</p>
       </section>
 
     </main>
@@ -165,6 +189,6 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
+
 </body>
 </html>
