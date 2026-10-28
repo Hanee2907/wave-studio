@@ -61,6 +61,9 @@ export class PitchListener {
   private stream: MediaStream | null = null;
   private buffer = new Float32Array(2048);
 
+  /** How loud the last reading was (0 = silent). Used to feel your rhythm. */
+  level = 0;
+
   constructor(private ctx: AudioContext) {}
 
   get listening(): boolean {
@@ -87,6 +90,11 @@ export class PitchListener {
   read(): number | null {
     if (!this.analyser) return null;
     this.analyser.getFloatTimeDomainData(this.buffer);
+
+    let sum = 0;
+    for (let i = 0; i < this.buffer.length; i++) sum += this.buffer[i] * this.buffer[i];
+    this.level = Math.sqrt(sum / this.buffer.length);
+
     return detectPitch(this.buffer, this.ctx.sampleRate);
   }
 }

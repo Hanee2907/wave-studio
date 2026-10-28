@@ -17,6 +17,15 @@ Turn on your microphone, sing or hum for one bar, and Wave Studio turns your voi
 - Deep or high voices are moved by octaves to fit the grid
 - Undo brings back your old melody
 
+### 🥁 Beat from my voice
+While you sing, Wave Studio also listens to your *rhythm*, and builds a drum beat that fits it.
+
+- It finds every syllable you start (new notes and sudden jumps in loudness)
+- Few, gentle syllables → a **Chill** half-time beat
+- A steady flow → a **Groove** backbeat
+- Lots of fast, strong syllables → an **Energetic** four-on-the-floor beat
+- Extra kicks land on your strongest off-beat syllables, hi-hats tick along with your words, and the bass joins at the start of each phrase
+
 ### 🥁 Beat grid
 - 16-step sequencer with kick, snare, hi-hat, clap and bass
 - 10-row melody piano roll in any key and scale (major, minor, pentatonic, blues)
@@ -43,6 +52,7 @@ A neon ring of frequency bars, a live waveform, a step ring, and sparks on every
 | Instruments | Oscillators and filtered noise with volume envelopes (kick = falling sine, hat = high-passed noise, clap = 3 noise bursts...) |
 | Effects | Filter → compressor chain, a convolution reverb made from fading noise, and a feedback delay |
 | Pitch detection | Normalised autocorrelation finds the repeating cycle in your voice, with parabolic interpolation for accuracy |
+| Beat from voice | Onset detection from note changes and loudness jumps, then rule-based drum placement by energy level |
 | WAV export | `OfflineAudioContext` renders the loop, then the samples are written into the WAV format by hand |
 | Share links | The song is packed into a compact string: drum steps as hex bit-masks, melody as base-36 digits |
 
@@ -70,6 +80,7 @@ src/
 ├── main.ts            # Connects the UI, audio and recording
 ├── music.ts           # Notes, scales and frequency maths
 ├── song.ts            # Song data, presets and share links
+├── voicebeat.ts       # Builds a drum beat from the rhythm of your singing
 ├── style.css
 ├── audio/
 │   ├── chain.ts       # Effects chain (filter, reverb, echo, compressor)

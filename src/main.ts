@@ -10,6 +10,7 @@ import {
 } from './song';
 import { Grid } from './ui/grid';
 import { Visualizer } from './ui/visualizer';
+import { beatFromVoice } from './voicebeat';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -172,9 +173,11 @@ playBtn.addEventListener('click', togglePlay);
 
 type RecState = 'idle' | 'countin' | 'recording';
 let recState: RecState = 'idle';
-let buckets: number[][] = [];   // the notes heard during each step
+let buckets: number[][] = [];       // the notes heard during each step
+let levelBuckets: number[][] = [];  // how loud you sang during each step
 let recStep = -1;
 let melodyBackup: number[] | null = null;
+let drumsBackup: Song['drums'] | null = null;
 
 const micBtn = $<HTMLButtonElement>('mic-btn');
 const recordBtn = $<HTMLButtonElement>('record-btn');
@@ -214,6 +217,8 @@ recordBtn.addEventListener('click', () => {
   song.melody = new Array(STEPS).fill(-1);
   grid.render(song);
   buckets = Array.from({ length: STEPS }, () => []);
+  levelBuckets = Array.from({ length: STEPS }, () => []);
+  drumsBackup = null;
   recStep = -1;
   recState = 'countin';
   scheduler.start(true);
@@ -228,9 +233,13 @@ undoBtn.addEventListener('click', () => {
   if (!melodyBackup) return;
   song.melody = melodyBackup;
   melodyBackup = null;
+  if (drumsBackup) {
+    song.drums = drumsBackup;
+    drumsBackup = null;
+  }
   undoBtn.classList.add('hidden');
   songChanged();
-  toast('↩ Your old melody is back');
+  toast('↩ Your old song is back');
 });
 
 /** Pick the note sung during one step (the middle value ignores wobbles) */
@@ -255,6 +264,16 @@ function finishRecording(): void {
   if (count === 0) {
     singStatus.textContent = 'I didn\'t catch any notes. Try singing a little louder, closer to the mic.';
     if (melodyBackup) song.melody = melodyBackup;
+  } else if ($<HTMLInputElement>('voice-beat').checked) {
+    // Build drums that follow the rhythm you sang
+    drumsBackup = JSON.parse(JSON.stringify(song.drums)) as Song['drums'];
+    const beat = beatFromVoice(levelBuckets, song.melody);
+    song.drums = beat.drums;
+    const syllables = beat.onsets.filter(Boolean).length;
+    const feel = { Chill: 'calm and chill', Groove: 'groovy', Energetic: 'full of energy' }[beat.style];
+    singStatus.textContent = `🎉 Got ${count} notes and ${syllables} syllables. Your singing felt ${feel}, so here's ${beat.style === 'Energetic' ? 'an' : 'a'} ${beat.style.toLowerCase()} beat that follows your rhythm!`;
+    undoBtn.classList.remove('hidden');
+    toast(`🥁 ${beat.style} beat built from your voice!`);
   } else {
     singStatus.textContent = `🎉 Got ${count} notes! Your voice is now the melody. Change the synth wave to hear it in new ways.`;
     undoBtn.classList.remove('hidden');
@@ -330,7 +349,9 @@ function onStep(event: StepEvent): void {
   if (song.drums.kick[event.step]) viz.kick();
 }
 
-function frame(now: number): void {
+// Steps and the mic are checked on a timer (not the drawing loop), because
+// browsers pause drawing in hidden tabs but the music keeps playing.
+function tick(): void {
   if (ctx && scheduler) {
     const queue = scheduler.queue;
     while (queue.length > 0 && queue[0].time <= ctx.currentTime) {
@@ -341,9 +362,14 @@ function frame(now: number): void {
   if (mic?.listening) {
     const freq = mic.read();
     updateTuner(freq);
-    if (recState === 'recording' && freq && recStep >= 0) buckets[recStep].push(freqToMidi(freq));
+    if (recState === 'recording' && recStep >= 0) {
+      levelBuckets[recStep].push(mic.level);
+      if (freq) buckets[recStep].push(freqToMidi(freq));
+    }
   }
+}
 
+function frame(now: number): void {
   viz.draw(chain?.analyser ?? null, now);
   requestAnimationFrame(frame);
 }
@@ -523,5 +549,6 @@ document.addEventListener('keydown', (event) => {
 // ================================
 
 songChanged();
+window.setInterval(tick, 15);
 requestAnimationFrame(frame);
 if (openedSharedSong) toast('🎧 Someone shared a song with you. Press play!');
