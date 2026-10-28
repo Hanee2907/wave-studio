@@ -3,19 +3,20 @@
 // then the samples are written into the WAV file format by hand.
 
 import type { Song } from '../song';
-import { STEPS } from '../song';
+import { stepCount } from '../song';
 import { buildChain } from './chain';
 import { playStep, stepLength, swingOffset } from './play';
 
 export async function renderWav(song: Song, loops = 2): Promise<Blob> {
   const sampleRate = 44100;
-  const loopSeconds = stepLength(song) * STEPS;
+  const steps = stepCount(song);
+  const loopSeconds = stepLength(song) * steps;
   const seconds = loopSeconds * loops + 2.5; // extra time so the reverb can fade out
   const ctx = new OfflineAudioContext(2, Math.ceil(seconds * sampleRate), sampleRate);
   const chain = buildChain(ctx, song);
 
   for (let loop = 0; loop < loops; loop++) {
-    for (let step = 0; step < STEPS; step++) {
+    for (let step = 0; step < steps; step++) {
       const time = 0.05 + loop * loopSeconds + step * stepLength(song) + swingOffset(song, step);
       playStep(ctx, chain.input, song, step, time);
     }

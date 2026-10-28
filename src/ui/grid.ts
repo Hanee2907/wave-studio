@@ -1,16 +1,39 @@
-// The step sequencer grid: 5 drum rows + 10 melody rows, 16 steps each
+// The step sequencer grid: 5 drum rows + 10 melody rows, up to 16 steps each.
+// In Indian mode the drums become tabla strokes, the top row shows the bols
+// (Dha, Dhin, Na...) and the taal markers (X = sam, 0 = khali).
 
-import { MELODY_ROWS, noteName, scaleNotes } from '../music';
+import { MELODY_ROWS, noteName, sargamName } from '../music';
 import type { DrumId, Song } from '../song';
-import { DRUM_IDS, STEPS } from '../song';
+import { beatStarts, DRUM_IDS, songNotes, STEPS, stepCount, TAALS } from '../song';
 
-const DRUM_LABELS: Record<DrumId, string> = {
+const WESTERN_LABELS: Record<DrumId, string> = {
   kick: '🥁 Kick',
   snare: '🪘 Snare',
   hat: '🎩 Hi-hat',
   clap: '👏 Clap',
   bass: '🎸 Bass',
 };
+
+const INDIAN_LABELS: Record<DrumId, string> = {
+  kick: '🪘 Ge · bayan',
+  snare: 'Na · dayan',
+  hat: 'Tin · dayan',
+  clap: 'Ke · slap',
+  bass: '🔔 Manjira',
+};
+
+/** The tabla syllable (bol) for one step, from which strokes are on */
+function bolAt(song: Song, step: number): string {
+  const d = song.drums;
+  const g = d.kick[step];
+  if (g && d.snare[step]) return 'Dha';
+  if (g && d.hat[step]) return 'Dhin';
+  if (d.snare[step]) return 'Na';
+  if (d.hat[step]) return 'Tin';
+  if (g) return 'Ge';
+  if (d.clap[step]) return 'Ke';
+  return '–';
+}
 
 export interface GridHandlers {
   toggleDrum: (id: DrumId, step: number) => void;
@@ -19,16 +42,31 @@ export interface GridHandlers {
 }
 
 export class Grid {
+  private gridEl = document.querySelector<HTMLElement>('.grid')!;
   private drumCells: Record<string, HTMLButtonElement[]> = {};
+  private drumLabels: Record<string, HTMLElement> = {};
   private melodyCells: HTMLButtonElement[][] = []; // [row][step]
   private noteLabels: HTMLButtonElement[] = [];
   private numbers: HTMLElement[] = [];
+  private marks: HTMLElement[] = [];
   private currentStep = -1;
 
   constructor(private handlers: GridHandlers) {
+    this.buildMarks();
     this.buildNumbers();
     this.buildDrums();
     this.buildMelody();
+  }
+
+  private buildMarks(): void {
+    const row = document.getElementById('taal-marks')!;
+    row.appendChild(document.createElement('span'));
+    for (let step = 0; step < STEPS; step++) {
+      const mark = document.createElement('span');
+      mark.className = 'mark';
+      row.appendChild(mark);
+      this.marks.push(mark);
+    }
   }
 
   private buildNumbers(): void {
@@ -36,8 +74,7 @@ export class Grid {
     row.appendChild(document.createElement('span')); // empty corner
     for (let step = 0; step < STEPS; step++) {
       const n = document.createElement('span');
-      n.className = 'num' + (step % 4 === 0 ? ' beat' : '');
-      n.textContent = String(step + 1);
+      n.className = 'num';
       row.appendChild(n);
       this.numbers.push(n);
     }
@@ -51,14 +88,13 @@ export class Grid {
 
       const label = document.createElement('span');
       label.className = 'row-label';
-      label.textContent = DRUM_LABELS[id];
       row.appendChild(label);
+      this.drumLabels[id] = label;
 
       this.drumCells[id] = [];
       for (let step = 0; step < STEPS; step++) {
         const cell = document.createElement('button');
-        cell.className = 'cell' + (step % 4 === 0 ? ' beat' : '');
-        cell.setAttribute('aria-label', DRUM_LABELS[id].split(' ')[1] + ' step ' + (step + 1));
+        cell.className = 'cell';
         cell.addEventListener('click', () => this.handlers.toggleDrum(id, step));
         row.appendChild(cell);
         this.drumCells[id].push(cell);
@@ -83,7 +119,7 @@ export class Grid {
       this.melodyCells[row] = [];
       for (let step = 0; step < STEPS; step++) {
         const cell = document.createElement('button');
-        cell.className = 'cell note' + (step % 4 === 0 ? ' beat' : '');
+        cell.className = 'cell note';
         cell.addEventListener('click', () => this.handlers.setMelody(step, row));
         line.appendChild(cell);
         this.melodyCells[row].push(cell);
@@ -94,22 +130,56 @@ export class Grid {
 
   /** Make every cell match the song */
   render(song: Song): void {
+    const indian = song.mode === 'indian';
+    const steps = stepCount(song);
+    const starts = beatStarts(song);
+    const taal = TAALS[song.taal] ?? TAALS.teentaal;
+
+    // Only show as many columns as the taal has matras
+    this.gridEl.style.setProperty('--steps', String(steps));
+    const columnHidden = (step: number) => step >= steps;
+
+    // Taal markers row (Indian mode only)
+    document.getElementById('taal-marks')!.classList.toggle('hidden', !indian);
+    this.marks.forEach((mark, step) => {
+      const index = starts.indexOf(step);
+      mark.textContent = indian && index >= 0 ? taal.marks[index] : '';
+      mark.className = 'mark' + (mark.textContent === 'X' ? ' sam' : mark.textContent === '0' ? ' khali' : '');
+      mark.classList.toggle('gone', columnHidden(step));
+    });
+
+    // Step numbers, or bols in Indian mode
+    this.numbers.forEach((n, step) => {
+      n.textContent = indian ? bolAt(song, step) : String(step + 1);
+      n.classList.toggle('beat', starts.includes(step));
+      n.classList.toggle('bol', indian);
+      n.classList.toggle('gone', columnHidden(step));
+    });
+
     DRUM_IDS.forEach((id) => {
+      const label = (indian ? INDIAN_LABELS : WESTERN_LABELS)[id];
+      this.drumLabels[id].textContent = label;
       this.drumCells[id].forEach((cell, step) => {
         const on = song.drums[id][step];
         cell.classList.toggle('on', on);
+        cell.classList.toggle('beat', starts.includes(step));
+        cell.classList.toggle('gone', columnHidden(step));
         cell.setAttribute('aria-pressed', String(on));
+        cell.setAttribute('aria-label', label.replace(/^\S+ /, '') + ' step ' + (step + 1));
       });
     });
 
-    const notes = scaleNotes(song.root, song.scale);
+    const notes = songNotes(song);
     for (let row = 0; row < MELODY_ROWS; row++) {
-      const name = noteName(notes[row]);
+      const name = indian ? sargamName(notes[row], song.root) : noteName(notes[row]);
       this.noteLabels[row].textContent = name;
+      this.noteLabels[row].classList.toggle('sa', indian && (notes[row] - song.root) % 12 === 0);
       this.noteLabels[row].setAttribute('aria-label', 'Play ' + name);
       this.melodyCells[row].forEach((cell, step) => {
         const on = song.melody[step] === row;
         cell.classList.toggle('on', on);
+        cell.classList.toggle('beat', starts.includes(step));
+        cell.classList.toggle('gone', columnHidden(step));
         cell.setAttribute('aria-pressed', String(on));
         cell.setAttribute('aria-label', name + ' step ' + (step + 1));
       });

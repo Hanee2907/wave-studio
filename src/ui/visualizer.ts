@@ -1,7 +1,5 @@
 // A glowing circle of frequency bars that breathes with the music
 
-import { STEPS } from '../song';
-
 export class Visualizer {
   private ctx: CanvasRenderingContext2D;
   private width = 0;
@@ -11,6 +9,9 @@ export class Visualizer {
   private pulse = 0;
   private step = -1;
   private sparks: { angle: number; dist: number; speed: number; life: number }[] = [];
+  private steps = 16;
+  private hueStart = 310; // pink
+  private hueSpan = 120;  // ...to cyan
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -39,6 +40,13 @@ export class Visualizer {
     this.step = step;
   }
 
+  /** Neon pink-to-cyan for Western, saffron-to-magenta for Indian mode */
+  setStyle(indian: boolean, steps: number): void {
+    this.steps = steps;
+    this.hueStart = indian ? 40 : 310;
+    this.hueSpan = indian ? 80 : 120;
+  }
+
   draw(analyser: AnalyserNode | null, time: number): void {
     const { ctx, width: w, height: h } = this;
     const cx = w / 2;
@@ -62,7 +70,7 @@ export class Visualizer {
 
     // Soft glow in the middle
     const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 2.4);
-    glow.addColorStop(0, `hsla(${hue + 300}, 100%, 65%, ${0.25 + this.pulse * 0.3})`);
+    glow.addColorStop(0, `hsla(${this.hueStart - 10 + hue}, 100%, 60%, ${0.25 + this.pulse * 0.3})`);
     glow.addColorStop(1, 'hsla(260, 100%, 50%, 0)');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, w, h);
@@ -78,7 +86,7 @@ export class Visualizer {
       const y1 = cy + Math.sin(angle) * radius;
       const x2 = cx + Math.cos(angle) * (radius + length);
       const y2 = cy + Math.sin(angle) * (radius + length);
-      ctx.strokeStyle = `hsl(${310 - (half / (bars / 2)) * 120 + hue}, 100%, ${58 + value * 18}%)`;
+      ctx.strokeStyle = `hsl(${this.hueStart - (half / (bars / 2)) * this.hueSpan + hue}, 100%, ${58 + value * 18}%)`;
       ctx.lineWidth = 3;
       ctx.lineCap = 'round';
       ctx.beginPath();
@@ -102,9 +110,9 @@ export class Visualizer {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // 16 step dots in an outer ring
-    for (let s = 0; s < STEPS; s++) {
-      const angle = (s / STEPS) * Math.PI * 2 - Math.PI / 2;
+    // One dot per step in an outer ring
+    for (let s = 0; s < this.steps; s++) {
+      const angle = (s / this.steps) * Math.PI * 2 - Math.PI / 2;
       const r = Math.min(radius + base * 1.45, Math.min(w, h) / 2 - 14);
       const active = s === this.step;
       ctx.fillStyle = active ? '#ffffff' : s % 4 === 0 ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.18)';
@@ -119,7 +127,7 @@ export class Visualizer {
       spark.dist += spark.speed;
       spark.life -= 0.025;
       const r = radius + spark.dist;
-      ctx.fillStyle = `hsla(${hue + 320}, 100%, 75%, ${spark.life})`;
+      ctx.fillStyle = `hsla(${this.hueStart + hue}, 100%, 75%, ${spark.life})`;
       ctx.beginPath();
       ctx.arc(cx + Math.cos(spark.angle) * r, cy + Math.sin(spark.angle) * r, 2, 0, Math.PI * 2);
       ctx.fill();

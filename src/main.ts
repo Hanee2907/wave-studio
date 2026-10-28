@@ -1,12 +1,13 @@
 import './style.css';
 import { applySettings, buildChain, type Chain } from './audio/chain';
-import { bass, clap, hat, kick, lead, snare } from './audio/instruments';
+import { playDrum, playNote } from './audio/play';
 import { PitchListener } from './audio/pitch';
 import { Scheduler, type StepEvent } from './audio/scheduler';
 import { renderWav } from './audio/wav';
-import { freqToMidi, midiToFreq, NOTE_NAMES, noteName, SCALES, scaleNotes, snapToRow } from './music';
+import { freqToMidi, NOTE_NAMES, noteName, sargamName, SCALES, snapToRow } from './music';
 import {
-  cloneSong, decodeSong, DRUM_IDS, encodeSong, PRESETS, STEPS, WAVES, type DrumId, type Song, type Wave,
+  cloneSong, decodeSong, DRUM_IDS, encodeSong, PRESETS, songNotes, STEPS, stepCount, TAALS, thekaDrums, WAVES,
+  type DrumId, type Mode, type Song, type Wave,
 } from './song';
 import { Grid } from './ui/grid';
 import { Visualizer } from './ui/visualizer';
@@ -71,27 +72,24 @@ function audio(): { ctx: AudioContext; chain: Chain; scheduler: Scheduler; mic: 
 }
 
 function currentNotes(): number[] {
-  return scaleNotes(song.root, song.scale);
+  return songNotes(song);
+}
+
+/** Note name in the current style: C4 D4... or Sa Re Ga... */
+function nameOf(midi: number): string {
+  return song.mode === 'indian' ? sargamName(midi, song.root) : noteName(midi);
 }
 
 /** Play one melody row right now (keyboard, clicking a note name, or editing the grid) */
 function playRow(row: number): void {
   const { ctx, chain } = audio();
-  lead(ctx, chain.input, ctx.currentTime + 0.005, midiToFreq(currentNotes()[row]), 0.45, song.wave);
+  playNote(ctx, chain.input, song, currentNotes()[row], ctx.currentTime + 0.005, 0.45);
   grid.flashLabel(row);
 }
 
 function previewDrum(id: DrumId): void {
   const { ctx, chain } = audio();
-  const t = ctx.currentTime + 0.005;
-  const sounds: Record<DrumId, () => void> = {
-    kick: () => kick(ctx, chain.input, t),
-    snare: () => snare(ctx, chain.input, t),
-    hat: () => hat(ctx, chain.input, t),
-    clap: () => clap(ctx, chain.input, t),
-    bass: () => bass(ctx, chain.input, t, midiToFreq(song.root - 24), 0.3),
-  };
-  sounds[id]();
+  playDrum(ctx, chain.input, song, id, ctx.currentTime + 0.005);
 }
 
 
@@ -267,7 +265,7 @@ function finishRecording(): void {
   } else if ($<HTMLInputElement>('voice-beat').checked) {
     // Build drums that follow the rhythm you sang
     drumsBackup = JSON.parse(JSON.stringify(song.drums)) as Song['drums'];
-    const beat = beatFromVoice(levelBuckets, song.melody);
+    const beat = beatFromVoice(levelBuckets, song.melody, song);
     song.drums = beat.drums;
     const syllables = beat.onsets.filter(Boolean).length;
     const feel = { Chill: 'calm and chill', Groove: 'groovy', Energetic: 'full of energy' }[beat.style];
@@ -306,7 +304,7 @@ function updateTuner(freq: number | null): void {
   const cents = Math.round((midi - Math.round(midi)) * 100);
   const inTune = Math.abs(cents) < 15;
 
-  note.textContent = noteName(midi);
+  note.textContent = nameOf(midi);
   note.classList.toggle('in-tune', inTune);
   needle.style.opacity = '1';
   needle.style.left = 50 + cents + '%';
@@ -396,8 +394,6 @@ bindRange('delay', () => song.delay * 100, (v) => { song.delay = v / 100; });
 
 // Presets
 const presetSelect = $<HTMLSelectElement>('preset');
-presetSelect.innerHTML = '<option value="">Choose a preset…</option>' +
-  Object.entries(PRESETS).map(([id, p]) => `<option value="${id}">${p.name}</option>`).join('');
 presetSelect.addEventListener('change', () => {
   const preset = PRESETS[presetSelect.value];
   if (!preset) return;
@@ -409,17 +405,12 @@ presetSelect.addEventListener('change', () => {
 
 // Key: each note picked so the grid sits in a comfy singing range
 const keySelect = $<HTMLSelectElement>('key-select');
-keySelect.innerHTML = NOTE_NAMES.map((name, pc) => {
-  const root = pc <= 5 ? 60 + pc : 48 + pc;
-  return `<option value="${root}">${name}</option>`;
-}).join('');
 keySelect.addEventListener('change', () => {
   song.root = Number(keySelect.value);
   songChanged();
 });
 
 const scaleSelect = $<HTMLSelectElement>('scale-select');
-scaleSelect.innerHTML = Object.entries(SCALES).map(([id, s]) => `<option value="${id}">${s.name}</option>`).join('');
 scaleSelect.addEventListener('change', () => {
   song.scale = scaleSelect.value;
   songChanged();
@@ -431,6 +422,7 @@ const WAVE_PATHS: Record<Wave, string> = {
   triangle: 'M2 12 L8 3 L20 21 L32 3 L38 12',
   square: 'M2 18 V6 H11 V18 H20 V6 H29 V18 H38',
   sawtooth: 'M2 18 L14 6 V18 L26 6 V18 L38 6',
+  sitar: 'M2 12 Q5 0 8 12 T14 12 Q17 4 20 12 T26 12 Q28 8 30 12 T34 12 L38 12',
 };
 const wavePicker = $('wave-picker');
 WAVES.forEach((wave) => {
@@ -463,17 +455,92 @@ function syncControls(): void {
   $('reverb-value').textContent = Math.round(song.reverb * 100) + '%';
   $('delay-value').textContent = Math.round(song.delay * 100) + '%';
 
+  syncMode();
   keySelect.value = String(song.root);
   scaleSelect.value = song.scale;
+  taalSelect.value = song.taal;
+  droneBox.checked = song.drone;
   wavePicker.querySelectorAll<HTMLButtonElement>('.wave-btn').forEach((b) => {
     const on = b.dataset.wave === song.wave;
     b.classList.toggle('selected', on);
     b.setAttribute('aria-checked', String(on));
   });
 
-  const scaleName = SCALES[song.scale].name.split(' ·')[0];
-  $('song-meta').textContent = `${NOTE_NAMES[song.root % 12]} ${scaleName.toLowerCase()} · ${song.bpm} BPM`;
+  const scale = SCALES[song.scale];
+  if (song.mode === 'indian') {
+    const taalName = (TAALS[song.taal] ?? TAALS.teentaal).name.split(' ·')[0];
+    $('song-meta').textContent = `${scale.name.split(' ·')[0]} · ${taalName} · Sa = ${NOTE_NAMES[song.root % 12]} · ${song.bpm} BPM`;
+    $('raga-mood').textContent = scale.mood ? '🕰️ ' + scale.mood : '';
+  } else {
+    $('song-meta').textContent = `${NOTE_NAMES[song.root % 12]} ${scale.name.split(' ·')[0].toLowerCase()} · ${song.bpm} BPM`;
+    $('raga-mood').textContent = '';
+  }
 }
+
+
+// ================================
+// 🎹 Western / 🪕 Indian mode
+// ================================
+
+const taalSelect = $<HTMLSelectElement>('taal-select');
+taalSelect.innerHTML = Object.entries(TAALS).map(([id, t]) => `<option value="${id}">${t.name}</option>`).join('');
+taalSelect.addEventListener('change', () => {
+  song.taal = taalSelect.value;
+  song.drums = thekaDrums(song.taal); // load the classic theka for this taal
+  songChanged();
+  toast(`🪘 ${TAALS[song.taal].name} theka loaded`);
+});
+
+const droneBox = $<HTMLInputElement>('drone');
+droneBox.addEventListener('change', () => {
+  song.drone = droneBox.checked;
+  songChanged();
+});
+
+let shownMode: Mode | null = null;
+
+/** Rebuild the menus and colours when the music style changes */
+function syncMode(): void {
+  const indian = song.mode === 'indian';
+  document.body.classList.toggle('indian', indian);
+  viz.setStyle(indian, stepCount(song));
+
+  document.querySelectorAll<HTMLButtonElement>('#mode-switch button').forEach((b) => {
+    const on = b.dataset.mode === song.mode;
+    b.classList.toggle('selected', on);
+    b.setAttribute('aria-checked', String(on));
+  });
+
+  if (shownMode === song.mode) return;
+  shownMode = song.mode;
+
+  presetSelect.innerHTML = '<option value="">' + (indian ? 'Choose a raga tune…' : 'Choose a preset…') + '</option>' +
+    Object.entries(PRESETS)
+      .filter(([, p]) => p.mode === song.mode)
+      .map(([id, p]) => `<option value="${id}">${p.name}</option>`).join('');
+
+  $('key-label').textContent = indian ? 'Sa (your key)' : 'Key';
+  keySelect.innerHTML = NOTE_NAMES.map((name, pc) => {
+    const root = pc <= 5 ? 60 + pc : 48 + pc;
+    return `<option value="${root}">${indian ? 'Sa = ' + name : name}</option>`;
+  }).join('');
+
+  $('scale-label').textContent = indian ? 'Raga' : 'Scale';
+  scaleSelect.innerHTML = Object.entries(SCALES)
+    .filter(([, scale]) => !!scale.indian === indian)
+    .map(([id, scale]) => `<option value="${id}">${scale.name}</option>`).join('');
+}
+
+document.querySelectorAll<HTMLButtonElement>('#mode-switch button').forEach((button) => {
+  button.addEventListener('click', () => {
+    const mode = button.dataset.mode as Mode;
+    if (mode === song.mode) return;
+    const preset = mode === 'indian' ? PRESETS.yaman : PRESETS.lofi;
+    song = cloneSong(preset.song);
+    songChanged();
+    toast(mode === 'indian' ? '🪕 Namaste! Indian mode: ' + preset.name : '🎹 Western mode: ' + preset.name);
+  });
+});
 
 $('clear-drums').addEventListener('click', () => {
   DRUM_IDS.forEach((id) => { song.drums[id] = new Array(STEPS).fill(false); });

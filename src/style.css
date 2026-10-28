@@ -636,7 +636,7 @@ select {
 
 .row {
   display: grid;
-  grid-template-columns: 100px repeat(16, minmax(0, 1fr));
+  grid-template-columns: 110px repeat(var(--steps, 16), minmax(0, 1fr));
   gap: 5px;
   margin-bottom: 5px;
   align-items: center;
@@ -766,33 +766,39 @@ select {
 
 /* ---------- Sound panel ---------- */
 
-.sound {
+.sound-grid {
   display: grid;
-  grid-template-columns: auto 1fr 1fr 1fr 1fr;
-  grid-template-rows: auto auto 1fr;
-  column-gap: 22px;
-  row-gap: 6px;
-  align-items: end;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px 26px;
+  align-items: start;
 }
 
-.sound .panel-head {
-  grid-column: 1 / -1;
-  margin-bottom: 4px;
+.sound-col {
+  display: grid;
+  gap: 12px;
 }
 
 .label {
-  grid-column: 1;
-  grid-row: 2;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-soft);
 }
 
+.raga-mood {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.legend {
+  margin-top: 16px;
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
 .wave-picker {
-  grid-column: 1;
-  grid-row: 3;
   display: grid;
-  grid-template-columns: repeat(4, 64px);
+  grid-template-columns: repeat(5, 62px);
   gap: 8px;
 }
 
@@ -831,18 +837,104 @@ select {
 .wave-btn.selected {
   color: var(--cyan);
   border-color: var(--cyan);
-  box-shadow: 0 0 16px rgba(55, 226, 255, 0.3);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--cyan) 30%, transparent);
 }
 
-.selects {
-  grid-row: 2 / 4;
-  display: grid;
-  gap: 10px;
+/* Things only shown in one mode */
+body:not(.indian) .indian-only {
+  display: none !important;
 }
 
-.sound > .control {
-  grid-row: 3;
-  padding-bottom: 8px;
+/* ---------- Western / Indian switch ---------- */
+
+.mode-switch {
+  display: flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--panel-border);
+}
+
+.mode-switch button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-soft);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s;
+}
+
+.mode-switch button.selected {
+  color: #12061f;
+  background: var(--gradient);
+}
+
+/* ---------- Indian mode: saffron, marigold and peacock colours ---------- */
+
+body.indian {
+  --bg: #170a0c;
+  --panel: rgba(46, 18, 22, 0.72);
+  --text-soft: #d6b8a8;
+  --pink: #ff9933;   /* saffron */
+  --violet: #e0457b; /* rani pink */
+  --cyan: #1fc2b0;   /* peacock */
+  --amber: #ffc93c;  /* marigold */
+  --lime: #ffe066;
+  --gradient: linear-gradient(120deg, #ff9933, #e0457b 50%, #1fc2b0);
+}
+
+body.indian .glow-1 { background: #ff9933; }
+body.indian .glow-2 { background: #1fc2b0; }
+
+body.indian .stage {
+  background:
+    radial-gradient(70% 60% at 50% 50%, rgba(255, 153, 51, 0.16), transparent 70%),
+    rgba(30, 10, 14, 0.85);
+}
+
+body.indian .melody-row .cell { --c: #ffb347; }
+
+/* Taal markers: X = sam, 0 = khali */
+.marks {
+  margin-bottom: 2px;
+}
+
+.mark {
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.mark.sam {
+  color: var(--pink);
+}
+
+.mark.khali {
+  color: var(--cyan);
+}
+
+.numbers .num.bol {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.numbers .num.bol.now {
+  color: var(--amber);
+}
+
+.note-label.sa {
+  color: var(--amber);
+}
+
+/* Columns past the end of the taal */
+.gone {
+  display: none !important;
 }
 
 /* ---------- Footer + toast ---------- */
@@ -882,32 +974,13 @@ select {
 /* ---------- Responsive ---------- */
 
 @media (max-width: 1100px) {
-  .sound {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto;
-    align-items: start;
+  .sound-grid {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .sound .label,
-  .wave-picker,
-  .selects,
-  .sound > .control {
-    grid-column: auto;
-    grid-row: auto;
-  }
-
-  .sound .label {
+  .sound-grid .sound-col:last-child {
     grid-column: 1 / -1;
-  }
-
-  .wave-picker {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(4, 1fr);
-  }
-
-  .selects {
-    grid-column: 1 / -1;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -941,8 +1014,21 @@ select {
     align-self: center;
   }
 
-  .sound {
+  .sound-grid,
+  .sound-grid .sound-col:last-child {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wave-picker {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .mode-switch {
+    width: 100%;
+  }
+
+  .mode-switch button {
+    flex: 1;
   }
 
   .stage-bottom .meta:last-child {

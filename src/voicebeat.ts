@@ -1,11 +1,12 @@
 // Beat from your voice: listen to HOW you sang and build drums that fit.
 //
 // 1. Find the "onsets": the steps where you started a new word, syllable or note.
-// 2. Measure how busy (onsets per bar) and how strong your singing was.
-// 3. Pick a style, then place drums so the kick and hats land with your rhythm.
+// 2. Measure how busy (onsets per cycle) and how loud your singing was.
+// 3. Pick a style, then place drums so they land with your rhythm.
+//    Western mode builds a kit beat. Indian mode builds on the taal's theka.
 
-import type { DrumId } from './song';
-import { STEPS } from './song';
+import type { DrumId, Song } from './song';
+import { beatStarts, STEPS, stepCount, TAALS, thekaDrums } from './song';
 
 export type BeatStyle = 'Chill' | 'Groove' | 'Energetic';
 
@@ -19,7 +20,9 @@ export interface VoiceBeat {
  * @param levels  loudness readings heard during each step
  * @param melody  the notes picked for each step (-1 = silent)
  */
-export function beatFromVoice(levels: number[][], melody: number[]): VoiceBeat {
+export function beatFromVoice(levels: number[][], melody: number[], song: Song): VoiceBeat {
+  const steps = stepCount(song);
+
   // Loudness of each step = its loudest moment, scaled so the loudest step = 1
   const energy = levels.map((step) => (step.length ? Math.max(...step) : 0));
   const peak = Math.max(...energy, 0.0001);
@@ -27,7 +30,7 @@ export function beatFromVoice(levels: number[][], melody: number[]): VoiceBeat {
 
   // A new syllable starts when a note begins, changes, or suddenly gets louder
   const onsets = melody.map((row, s) => {
-    if (row < 0) return false;
+    if (row < 0 || s >= steps) return false;
     const prev = s === 0 ? -1 : melody[s - 1];
     const louder = s > 0 && energy[s] > energy[s - 1] * 1.6;
     return prev < 0 || prev !== row || louder;
@@ -39,11 +42,20 @@ export function beatFromVoice(levels: number[][], melody: number[]): VoiceBeat {
 
   // More syllables = more energy. Really loud singing bumps it up one level.
   const styles: BeatStyle[] = ['Chill', 'Groove', 'Energetic'];
-  let level = onsetCount <= 4 ? 0 : onsetCount <= 8 ? 1 : 2;
+  let level = onsetCount <= steps / 4 ? 0 : onsetCount <= steps / 2 ? 1 : 2;
   if (loudness > 0.15) level = Math.min(2, level + 1);
   const style = styles[level];
 
-  const empty = () => new Array<boolean>(STEPS).fill(false);
+  const drums = song.mode === 'indian'
+    ? indianBeat(song, style, onsets, norm)
+    : westernBeat(style, onsets, norm, melody);
+
+  return { style, onsets, drums };
+}
+
+const empty = () => new Array<boolean>(STEPS).fill(false);
+
+function westernBeat(style: BeatStyle, onsets: boolean[], norm: number[], melody: number[]): Record<DrumId, boolean[]> {
   const drums: Record<DrumId, boolean[]> = { kick: empty(), snare: empty(), hat: empty(), clap: empty(), bass: empty() };
   const on = (id: DrumId, ...steps: number[]) => steps.forEach((s) => { drums[id][s] = true; });
 
@@ -65,9 +77,8 @@ export function beatFromVoice(levels: number[][], melody: number[]): VoiceBeat {
     for (let s = 0; s < STEPS; s++) on('hat', s);
   }
 
-  // The voice part: extra kicks where you hit a strong syllable off the main beats
-  const kickSpots = [3, 6, 10, 11, 14];
-  kickSpots.forEach((s) => {
+  // Extra kicks where you hit a strong syllable off the main beats
+  [3, 6, 10, 11, 14].forEach((s) => {
     if (onsets[s] && norm[s] > 0.55 && !drums.snare[s] && !drums.clap[s]) drums.kick[s] = true;
   });
 
@@ -79,9 +90,49 @@ export function beatFromVoice(levels: number[][], melody: number[]): VoiceBeat {
   // Bass plays with every kick and whenever you start a new phrase
   drums.kick.forEach((k, s) => { if (k) drums.bass[s] = true; });
   melody.forEach((row, s) => {
-    const phraseStart = row >= 0 && (s === 0 || melody[s - 1] < 0);
-    if (phraseStart) drums.bass[s] = true;
+    if (row >= 0 && (s === 0 || melody[s - 1] < 0)) drums.bass[s] = true;
   });
 
-  return { style, onsets, drums };
+  return drums;
+}
+
+function indianBeat(song: Song, style: BeatStyle, onsets: boolean[], norm: number[]): Record<DrumId, boolean[]> {
+  const steps = stepCount(song);
+  const starts = beatStarts(song);
+  const marks = (TAALS[song.taal] ?? TAALS.teentaal).marks;
+
+  if (style === 'Chill') {
+    // Just the skeleton of the taal: Dha on sam, Tin on khali, manjira on sam
+    const drums: Record<DrumId, boolean[]> = { kick: empty(), snare: empty(), hat: empty(), clap: empty(), bass: empty() };
+    drums.kick[0] = true;
+    drums.snare[0] = true;
+    drums.bass[0] = true;
+    starts.forEach((s, i) => {
+      if (marks[i] === '0') drums.hat[s] = true;
+      else if (s !== 0) drums.snare[s] = true;
+    });
+    // Soft Na strokes on your syllables
+    onsets.forEach((isOnset, s) => { if (isOnset && s < steps && !drums.hat[s]) drums.snare[s] = true; });
+    return drums;
+  }
+
+  // Groove and Energetic start from the full theka
+  const drums = thekaDrums(song.taal);
+  if (style === 'Energetic') {
+    // Khali sections are "empty" (no bayan), so we must not add Ge there
+    const khali = new Set<number>();
+    starts.forEach((start, i) => {
+      if (marks[i] !== '0') return;
+      const end = starts[i + 1] ?? steps;
+      for (let s = start; s < end; s++) khali.add(s);
+    });
+
+    starts.forEach((s) => { drums.bass[s] = true; });
+    onsets.forEach((isOnset, s) => {
+      if (!isOnset || s >= steps) return;
+      if (norm[s] > 0.6 && !khali.has(s)) drums.kick[s] = true;          // strong syllable = Ge boom
+      else if (!drums.snare[s] && !drums.hat[s]) drums.clap[s] = true;   // light one = Ke
+    });
+  }
+  return drums;
 }
