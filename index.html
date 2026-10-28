@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wave Studio - Make beats, sing melodies, share songs</title>
+  <meta name="description" content="A browser music studio where every sound is made with code. Build beats, sing a melody into your mic, and share your song with a link.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="glow glow-1" aria-hidden="true"></div>
+  <div class="glow glow-2" aria-hidden="true"></div>
+
+  <div class="app">
+
+    <header class="top">
+      <a class="brand" href="./" aria-label="Wave Studio home">
+        <img src="/favicon.svg" alt="" class="brand-icon">
+        <div>
+          <h1>Wave Studio</h1>
+          <p class="tagline">Make beats. Sing melodies. Share songs.</p>
+        </div>
+      </a>
+      <div class="top-actions">
+        <button id="share-btn" class="btn btn-glow">🔗 Share song</button>
+        <button id="export-btn" class="btn">⤓ Export WAV</button>
+      </div>
+    </header>
+
+    <main class="studio">
+
+      <!-- Visualizer -->
+      <section class="panel stage" aria-label="Music visualizer">
+        <canvas id="viz"></canvas>
+        <div class="stage-top">
+          <span id="status-pill" class="pill">● Ready</span>
+          <span id="count-in" class="count-in"></span>
+        </div>
+        <div class="stage-bottom">
+          <span id="song-meta" class="meta"></span>
+          <span class="meta">Keys <kbd>A</kbd>–<kbd>;</kbd> play notes · <kbd>Space</kbd> play/stop</span>
+        </div>
+      </section>
+
+      <!-- Transport -->
+      <section class="panel transport">
+        <button id="play-btn" class="play-btn" aria-label="Play">
+          <span class="play-icon" aria-hidden="true"></span>
+        </button>
+
+        <div class="controls">
+          <label class="control">
+            <span>Tempo <b id="bpm-value">100</b> BPM</span>
+            <input id="bpm" type="range" min="60" max="180" step="1">
+          </label>
+          <label class="control">
+            <span>Swing <b id="swing-value">0%</b></span>
+            <input id="swing" type="range" min="0" max="60" step="1">
+          </label>
+          <label class="control">
+            <span>Volume <b id="volume-value">80%</b></span>
+            <input id="volume" type="range" min="0" max="100" step="1">
+          </label>
+          <label class="control">
+            <span>Start from a vibe</span>
+            <select id="preset"></select>
+          </label>
+        </div>
+      </section>
+
+      <!-- Sing a melody -->
+      <section class="panel sing">
+        <div class="panel-head">
+          <h2>🎤 Sing a melody</h2>
+          <span class="badge">Your voice → notes</span>
+        </div>
+
+        <div class="tuner">
+          <div id="tuner-note" class="tuner-note">–</div>
+          <div class="tuner-side">
+            <div class="cents"><span id="cents-needle"></span></div>
+            <p id="tuner-hint" class="tuner-hint">Turn on your mic and sing or hum</p>
+          </div>
+        </div>
+
+        <div class="sing-actions">
+          <button id="mic-btn" class="btn">🎙️ Turn on microphone</button>
+          <button id="record-btn" class="btn btn-record" disabled>⏺ Record 1 bar</button>
+          <button id="undo-btn" class="btn btn-small hidden">↩ Undo</button>
+        </div>
+        <p id="sing-status" class="sing-status">After a 4-beat count-in, sing for one bar. Each step becomes a note in your key.</p>
+      </section>
+
+      <!-- Sequencer -->
+      <section class="panel sequencer" aria-label="Step sequencer">
+        <div class="panel-head">
+          <h2>Beat grid</h2>
+          <div class="head-actions">
+            <button id="clear-drums" class="btn btn-small">Clear beat</button>
+            <button id="clear-melody" class="btn btn-small">Clear melody</button>
+          </div>
+        </div>
+
+        <div class="grid-scroll">
+          <div class="grid">
+            <div id="step-numbers" class="row numbers"></div>
+            <div id="drum-grid"></div>
+            <div class="divider"><span>Melody</span></div>
+            <div id="melody-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sound design -->
+      <section class="panel sound">
+        <div class="panel-head">
+          <h2>Sound</h2>
+        </div>
+
+        <p class="label">Synth wave</p>
+        <div id="wave-picker" class="wave-picker" role="radiogroup" aria-label="Synth wave shape"></div>
+
+        <div class="selects">
+          <label class="control">
+            <span>Key</span>
+            <select id="key-select"></select>
+          </label>
+          <label class="control">
+            <span>Scale</span>
+            <select id="scale-select"></select>
+          </label>
+        </div>
+
+        <label class="control">
+          <span>Brightness <b id="cutoff-value"></b></span>
+          <input id="cutoff" type="range" min="300" max="12000" step="50">
+        </label>
+        <label class="control">
+          <span>Reverb <b id="reverb-value"></b></span>
+          <input id="reverb" type="range" min="0" max="100" step="1">
+        </label>
+        <label class="control">
+          <span>Echo <b id="delay-value"></b></span>
+          <input id="delay" type="range" min="0" max="100" step="1">
+        </label>
+      </section>
+
+    </main>
+
+    <footer class="bottom">
+      <p>Every sound here is generated live with the Web Audio API. No samples, no audio files.</p>
+      <p>Built with TypeScript, Vite and the Web Audio API</p>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
